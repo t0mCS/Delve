@@ -1,4 +1,4 @@
-import sys
+import sys, multiprocessing
 import os
 import json
 import requests
@@ -91,7 +91,7 @@ class TweetResponder(QWidget):
             return
 
         # Create a prompt for the Claude API to generate a response
-        prompt = f"Original Tweet: {self.original_text}\nHey Claude, can you reply to this comment in a way that sounds natural and friendly, as if a person were saying it casually over text? Show a bit of personality, but don’t be overly formal or stiff. Keep it real. Don't be too enthusiastic or too negative. Just be chill and friendly."
+        prompt = f"Original Tweet: {self.original_text}\nHey Claude, can you reply to this comment in a way that sounds natural, as if a person were saying it casually over text? Show a bit of personality, but don't be overly formal or stiff. Keep it real. Don't be too enthusiastic or too negative. Just be chill and friendly."
 
         # Call the API to get replies
         suggestions = self.call_claude_api(prompt)
@@ -150,7 +150,7 @@ class TweetResponder(QWidget):
             'messages': [
                 {
                     'role': 'user',
-                    'content': f"{prompt}\n\nPlease provide 3 distinct reply suggestions, each on a new line."
+                    'content': f"{prompt}\n\nPlease provide 3 distinct reply suggestions, each on a new line. Say nothing other than the suggestions, no intro to it or anything other than the 3 suggestions."
                 }
             ]
         }
@@ -182,10 +182,11 @@ class TweetResponder(QWidget):
             QMessageBox.information(self, "Success", f"Response saved successfully: {output_filename}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to save file: {e}")
+        self.close()
 
-    def no_response(self):
+    def no_response(self, event):
         QMessageBox.information(self, "No Response", "You have chosen not to respond.")
-        # Optionally, you can perform any action here if needed
+        self.close()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
