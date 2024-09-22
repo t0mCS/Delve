@@ -5,9 +5,9 @@ import sys, multiprocessing
 import os
 import json
 import requests
-from PyQt5.QtWidgets import (QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QFrame, QMessageBox, QTextEdit, QSizePolicy, QPushButton)
+from PyQt5.QtWidgets import (QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QFrame, QMessageBox, QTextEdit, QSizePolicy, QPushButton, QScrollArea)
 from PyQt5.QtGui import QFont, QIcon, QCursor, QPixmap, QColor
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QSize
 
 class TweetFrame(QFrame):
     def __init__(self, text, is_original=False, parent=None):
@@ -16,9 +16,12 @@ class TweetFrame(QFrame):
         layout = QVBoxLayout()
 
         # Tweet text
-        self.tweet_text = QLabel(text)
-        self.tweet_text.setWordWrap(True)
-        self.tweet_text.setStyleSheet(f"color: #000000; font-size: 16px;")
+        self.tweet_text = QTextEdit(text)
+        self.tweet_text.setReadOnly(True)
+        self.tweet_text.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.tweet_text.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.tweet_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.tweet_text.setStyleSheet(f"color: #000000; font-size: 16px; background-color: transparent; border: none;")
 
         layout.addWidget(self.tweet_text)
 
@@ -33,13 +36,18 @@ class TweetFrame(QFrame):
             }}
         """)
 
+    def sizeHint(self):
+        return self.tweet_text.document().size().toSize() + QSize(20, 20)
+
 class TweetResponder(QWidget):
-    def __init__(self, original_post, reply):
+    def __init__(self, original_post, reply, suggestions, page):
         super().__init__()
-        self.original_post = original_post
         self.reply = reply
-        self.setWindowTitle("Tweet and Reply")
-        self.resize(500, 400)
+        self.original_post = original_post
+        self.suggestions = suggestions
+        self.page = page
+        self.setWindowTitle("Tweet and Suggestions")
+        self.resize(800, 1000)
         self.setWindowIcon(QIcon('icon.png'))
         self.setStyleSheet("""
             QWidget {
@@ -66,125 +74,82 @@ class TweetResponder(QWidget):
 
     def init_ui(self):
         main_layout = QVBoxLayout()
-        main_layout.setSpacing(20)
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
 
         # Original Tweet Display
+        scroll_layout.addWidget(QLabel("Original Tweet:"))
         self.tweet_frame = TweetFrame(self.original_post, is_original=True)
-        main_layout.addWidget(self.tweet_frame)
+        scroll_layout.addWidget(self.tweet_frame)
 
         # Reply Display
+        scroll_layout.addWidget(QLabel("Reply:"))
         if self.reply != "no replies":
             self.reply_frame = TweetFrame(self.reply)
-            main_layout.addWidget(self.reply_frame)
+            scroll_layout.addWidget(self.reply_frame)
         else:
             no_reply_label = QLabel("No replies yet")
-            no_reply_label.setStyleSheet("color: #657786; font-style: italic;")
-            main_layout.addWidget(no_reply_label)
+            no_reply_label.setStyleSheet("font-style: italic;")
+            scroll_layout.addWidget(no_reply_label)
 
-        # Replies Buttons Layout
-        self.buttons_layout = QVBoxLayout()
-        main_layout.addLayout(self.buttons_layout)
+        # Suggestions Display
+        if self.suggestions:
+            scroll_layout.addWidget(QLabel("Suggested Replies:"))
+            for suggestion in self.suggestions:
+                suggestion_frame = QFrame()
+                suggestion_layout = QVBoxLayout(suggestion_frame)
 
+                suggestion_text = QTextEdit(suggestion)
+                suggestion_text.setReadOnly(True)
+                suggestion_layout.addWidget(suggestion_text)
+
+                use_reply_button = QPushButton("Use This Reply")
+                use_reply_button.clicked.connect(lambda _, s=suggestion: self.use_reply(s))
+                suggestion_layout.addWidget(use_reply_button)
+
+                scroll_layout.addWidget(suggestion_frame)
+
+        # No Response Button
+        no_response_button = QPushButton("No Response")
+        no_response_button.clicked.connect(self.no_response)
+        scroll_layout.addWidget(no_response_button)
+
+        scroll_layout.addStretch(1)
+        scroll_area.setWidget(scroll_content)
+        main_layout.addWidget(scroll_area)
         self.setLayout(main_layout)
 
-        # Generate replies only if there's no existing reply
-        if self.reply == "no replies":
-            self.generate_replies()
-
-    def load_tweet(self, reply):
-        # This method is no longer needed as we're passing the data directly
-        pass
-
-    def generate_replies(self):
-        if not self.original_post:
-            QMessageBox.warning(self, "Warning", "No original tweet to reply to.")
-            return
-
-        # Create a prompt for the Claude API to generate a response
-        prompt = f"Original Tweet: {self.original_post}\nHey Claude, can you reply to this comment in a way that sounds natural, as if a person were saying it casually over text? Show a bit of personality, but don't be overly formal or stiff. Keep it real. Don't be too enthusiastic or too negative. Just be chill and friendly."
-
-        # Call the API to get replies
-        suggestions = self.call_claude_api(prompt)
-
-        if suggestions:
-            # Clear any existing buttons
-            for i in reversed(range(self.buttons_layout.count())):
-                widget = self.buttons_layout.itemAt(i).widget()
-                if widget is not None:
-                    widget.setParent(None)
-
-            # Create buttons for each suggestion
-            for suggestion in suggestions:
-                reply_button = QPushButton(suggestion)
-                reply_button.clicked.connect(lambda _, s=suggestion: self.save_reply(s))
-                self.buttons_layout.addWidget(reply_button)
-
-            # Add the "No Response" button
-            no_response_button = QPushButton("No Response")
-            no_response_button.clicked.connect(self.no_response)
-            self.buttons_layout.addWidget(no_response_button)
-        else:
-            QMessageBox.information(self, "No Suggestions", "No suggestions generated.")
-
-    def call_claude_api(self, prompt):
-        CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages'
-        API_KEY = os.getenv('CLAUDE_API_KEY')
-        if not API_KEY:
-            QMessageBox.critical(self, "API Key Error", "Claude API key not found. Please set the CLAUDE_API_KEY environment variable.")
-            return []
-
-        headers = {
-            'Content-Type': 'application/json',
-            'x-api-key': API_KEY,
-            'anthropic-version': '2023-06-01'
-        }
-
-        payload = {
-            'model': 'claude-3-5-sonnet-20240620',
-            'max_tokens': 1024,
-            'messages': [
-                {
-                    'role': 'user',
-                    'content': f"{prompt}\n\nPlease provide 3 distinct reply suggestions, each on a new line. Say nothing other than the suggestions, no intro to it or anything other than the 3 suggestions."
-                }
-            ]
-        }
-
-        response = requests.post(CLAUDE_API_URL, headers=headers, json=payload)
-        if response.status_code == 200:
-            result = response.json()
-            content = result.get('content', [])
-            if content and isinstance(content[0], dict):
-                text = content[0].get('text', '')
-                suggestions = [line.strip() for line in text.split('\n') if line.strip()]
-                return suggestions[:3]
-        else:
-            QMessageBox.critical(self, "API Error", f"Error: {response.status_code}, {response.text}")
-        return []
-
-    def save_reply(self, selected_reply):
-        output_data = {
-            'original_tweet': self.original_post,
-            'selected_response': selected_reply
-        }
-
-        # Construct the path to the Documents directory for saving output
-        documents_path = os.path.join(os.path.expanduser("~"), "Documents")
-        output_filename = os.path.join(documents_path, f"response_{self.tweet_timestamp.replace(':', '-')}.json")  # Ensure unique filenames
+    def use_reply(self, suggestion):
         try:
-            with open(output_filename, 'w') as outfile:
-                json.dump(output_data, outfile, indent=4)
-            QMessageBox.information(self, "Success", f"Response saved successfully: {output_filename}")
+            # Find all reply buttons
+            reply_buttons = self.page.query_selector_all('div[data-testid="reply"]')
+
+            if len(reply_buttons) < 2:
+                raise Exception("Couldn't find the reply button for the comment")
+
+            # Click the second reply button (first one is for the original tweet, second is for the comment)
+            reply_buttons[1].click()
+
+            # Wait for the reply text box to appear and type the suggestion
+            self.page.wait_for_selector('div[data-testid="tweetTextarea_0"]')
+            self.page.fill('div[data-testid="tweetTextarea_0"]', suggestion)
+
+            # Click the Reply button
+            self.page.click('div[data-testid="tweetButtonInline"]')
+
+            QMessageBox.information(self, "Reply Sent", "Your reply has been posted successfully!")
+            self.close()
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to save file: {e}")
-        self.close()
+            QMessageBox.critical(self, "Error", f"Failed to post reply: {str(e)}")
 
     def no_response(self):
         QMessageBox.information(self, "No Response", "You have chosen not to respond.")
         self.close()
 
 CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages'  # Example Claude API URL
-API_KEY = ''  # Replace with your actual Claude API key
+API_KEY = os.getenv('CLAUDE_API_KEY')
 headers = {
     'Content-Type': 'application/json',
     'X-API-Key': API_KEY,
@@ -203,18 +168,28 @@ def generate_claude_replies(prompt):
             }
         ]
     }
-    response = requests.post(CLAUDE_API_URL, headers=headers, json=payload)
-    if response.status_code == 200:
+    try:
+        response = requests.post(CLAUDE_API_URL, headers=headers, json=payload)
+        response.raise_for_status()  # This will raise an exception for HTTP errors
         result = response.json()
         content = result.get('content', [])
         if content and isinstance(content[0], dict):
             text = content[0].get('text', '')
-            # Split the text into lines and return up to 3 non-empty lines
             suggestions = [line.strip() for line in text.split('\n') if line.strip()]
             return suggestions[:3]
-    else:
-        print(f"Error: {response.status_code}, {response.text}")
-    return []
+        else:
+            print("Unexpected response structure:", result)
+            return []
+    except requests.exceptions.RequestException as e:
+        print(f"API request failed: {e}")
+        if response:
+            print(f"Response status code: {response.status_code}")
+            print(f"Response content: {response.text}")
+        return []
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+        return []
+
 
 
 # Replace these with your own X credentials
@@ -325,9 +300,13 @@ def main():
 
                 prompt = f"Original Tweet: {original_post}\nDraft a polite and engaging unique and clever response."
                 suggestions = generate_claude_replies(prompt)
+                print("Generated suggestions:", suggestions)
+
+                if not suggestions:
+                    print("No suggestions were generated. Proceeding with empty list.")
 
                 app = QApplication(sys.argv)
-                window = TweetResponder(original_post, suggestions)
+                window = TweetResponder(original_post, reply, suggestions, page)
                 window.show()
                 sys.exit(app.exec_())
             else:
