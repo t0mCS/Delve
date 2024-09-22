@@ -3,59 +3,94 @@ import os
 import json
 import requests
 from PyQt5.QtWidgets import (QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QFrame, QMessageBox, QTextEdit, QSizePolicy)
-from PyQt5.QtGui import QFont, QIcon, QCursor
+from PyQt5.QtGui import QFont, QIcon, QCursor, QPixmap, QColor
 from PyQt5.QtCore import Qt
+
+class TweetFrame(QFrame):
+    def __init__(self, text, parent=None):
+        super().__init__(parent)
+        self.setObjectName("tweetFrame")
+        layout = QVBoxLayout()
+
+        # Profile picture
+        profile_pic = QLabel()
+        pixmap = QPixmap("default_profile.png")
+        if pixmap.isNull():
+            pixmap = QPixmap(48, 48)
+            pixmap.fill(QColor("#1DA1F2"))
+        profile_pic.setPixmap(pixmap.scaled(48, 48, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        profile_pic.setFixedSize(48, 48)
+        profile_pic.setStyleSheet("border-radius: 24px; background-color: #2F3336;")
+
+        # Username and handle
+        user_info = QLabel("Username @handle")
+        user_info.setStyleSheet("color: #8899A6; font-size: 14px;")
+
+        # Tweet text
+        self.tweet_text = QLabel(text)
+        self.tweet_text.setWordWrap(True)
+        self.tweet_text.setStyleSheet("color: #FFFFFF; font-size: 16px;")
+
+        header_layout = QHBoxLayout()
+        header_layout.addWidget(profile_pic)
+        header_layout.addWidget(user_info, 1)
+
+        layout.addLayout(header_layout)
+        layout.addWidget(self.tweet_text)
+
+        self.setLayout(layout)
+        self.setStyleSheet("""
+            QFrame#tweetFrame {
+                background-color: #15202B;
+                border: 1px solid #38444D;
+                border-radius: 12px;
+                padding: 5px;
+            }
+        """)
 
 class TweetResponder(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Tweet Responder")
         self.resize(600, 700)
-        self.setWindowIcon(QIcon('icon.png'))  # Optional: Set an application icon
+        self.setWindowIcon(QIcon('icon.png'))
         self.setStyleSheet("""
             QWidget {
-                background-color: #000000;  /* Black background */
-                color: #FFFFFF;  /* White text */
+                background-color: #15202B;
+                color: #FFFFFF;
                 font-family: "Helvetica Neue", Arial, sans-serif;
             }
             QLabel {
                 color: #FFFFFF;
             }
             QFrame {
-                background-color: #1DA1F2;  /* X platform blue */
-                color: #FFFFFF;
-                border: 2px solid #1DA1F2;
-                border-radius: 15px;
-                padding: 5px;
-            }
-            QFrame:hover {
-                background-color: #0d8ddb;
-            }
-            QTextEdit {
-                background-color: #15202B;  /* Darker background for text area */
+                background-color: #1DA1F2;
                 color: #FFFFFF;
                 border: none;
-                padding: 5px;
+                border-radius: 20px;
+                padding: 10px;
+            }
+            QFrame:hover {
+                background-color: #1A91DA;
+            }
+            QTextEdit {
+                background-color: #253341;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 10px;
+                padding: 10px;
                 font-size: 16px;
             }
         """)
         self.init_ui()
 
     def init_ui(self):
-        # Set up the layout
         main_layout = QVBoxLayout()
         main_layout.setSpacing(20)
 
-        # Original Tweet Label
-        self.tweet_label = QLabel("Original Tweet:")
-        self.tweet_label.setFont(QFont('Helvetica Neue', 16, QFont.Bold))
-        main_layout.addWidget(self.tweet_label)
-
         # Original Tweet Display
-        self.tweet_display = QTextEdit()
-        self.tweet_display.setReadOnly(True)
-        self.tweet_display.setFont(QFont('Helvetica Neue', 14))
-        main_layout.addWidget(self.tweet_display)
+        self.tweet_frame = TweetFrame("Loading tweet...")
+        main_layout.addWidget(self.tweet_frame)
 
         # Replies Buttons Layout
         self.buttons_layout = QVBoxLayout()
@@ -70,20 +105,21 @@ class TweetResponder(QWidget):
         self.generate_replies()
 
     def load_tweet(self):
-        # Load the input JSON file
         try:
             with open('/Users/jordanwhite/Library/Application Support/Electron/surfer_data/X Corp/Twitter Posts/twitter-001/twitter-001.json', 'r') as file:
                 data = json.load(file)
-            tweets = data['content']  # The 'content' key contains the list of tweets
+            tweets = data.get('content', [])
             if tweets:
                 most_recent_tweet = tweets[0]
-                self.original_text = most_recent_tweet['text']
-                self.tweet_display.setPlainText(self.original_text)
-                self.tweet_timestamp = most_recent_tweet['timestamp']
+                self.original_text = most_recent_tweet.get('text', '')
+                self.tweet_timestamp = most_recent_tweet.get('timestamp', '')
+
+                self.tweet_frame.tweet_text.setText(self.original_text)
             else:
-                self.tweet_display.setPlainText("No tweets found.")
+                self.tweet_frame.tweet_text.setText("No tweets found.")
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to load tweet data: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to load tweet data: {str(e)}")
+            print(f"Error details: {e}")  # For debugging
 
     def generate_replies(self):
         if not hasattr(self, 'original_text') or not self.original_text:
