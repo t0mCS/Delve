@@ -124,7 +124,7 @@ class TweetResponder(QWidget):
     def use_reply(self, suggestion):
         try:
             # Find all reply buttons
-            reply_buttons = self.page.query_selector_all('div[data-testid="reply"]')
+            reply_buttons = self.page.query_selector_all('button[data-testid="reply"]')
 
             if len(reply_buttons) < 2:
                 raise Exception("Couldn't find the reply button for the comment")
