@@ -328,7 +328,7 @@ def main():
                 print(f"Original tweet: {original_post}")
                 print(f"Reply: {reply}")
 
-                prompt = f"Original Tweet: {original_post}\n Response Tweet: {reply}\nDraft a polite and engaging unique and clever response to the response tweet. Show a bit of personality, but don't be overly formal or stiff. Keep it real. Don't be too enthusiastic or too negative. Just be chill and friendly."
+                prompt = f"Original Tweet: {original_post}\n Response Tweet: {reply}\nDraft a witty and engaging unique response to the response tweet. Show a bit of personality, but don't be overly formal or stiff. Keep it real. Don't be too enthusiastic or too negative. Just be chill and friendly. Do not say anything other than the 3 responses. No numbers, no heading intro, just the responses and nothing else."
                 suggestions = generate_claude_replies(prompt)
                 print("Generated suggestions:", suggestions)
 
