@@ -183,6 +183,39 @@ class TweetResponder(QWidget):
         QMessageBox.information(self, "No Response", "You have chosen not to respond.")
         self.close()
 
+CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages'  # Example Claude API URL
+API_KEY = ''  # Replace with your actual Claude API key
+headers = {
+    'Content-Type': 'application/json',
+    'X-API-Key': API_KEY,
+    'anthropic-version': '2023-06-01'  # Replace with the correct version
+}
+
+def generate_replies(prompt):
+    """Calls Claude API to generate replies based on the prompt."""
+    payload = {
+        'model': 'claude-3-5-sonnet-20240620',
+        'max_tokens': 1024,
+        'messages': [
+            {
+                'role': 'user',
+                'content': f"{prompt}\n\nPlease provide 3 distinct reply suggestions, each on a new line."
+            }
+        ]
+    }
+    response = requests.post(CLAUDE_API_URL, headers=headers, json=payload)
+    if response.status_code == 200:
+        result = response.json()
+        content = result.get('content', [])
+        if content and isinstance(content[0], dict):
+            text = content[0].get('text', '')
+            # Split the text into lines and return up to 3 non-empty lines
+            suggestions = [line.strip() for line in text.split('\n') if line.strip()]
+            return suggestions[:3]
+    else:
+        print(f"Error: {response.status_code}, {response.text}")
+    return []
+
 
 # Replace these with your own X credentials
 USERNAME = 'schtwiller'
@@ -290,8 +323,11 @@ def main():
                 print(f"Original tweet: {original_post}")
                 print(f"Reply: {reply}")
 
+                prompt = f"Original Tweet: {original_post}\nDraft a polite and engaging unique and clever response."
+                suggestions = generate_replies(prompt)
+
                 app = QApplication(sys.argv)
-                window = TweetResponder(original_post, reply)
+                window = TweetResponder(original_post, suggestions)
                 window.show()
                 sys.exit(app.exec_())
             else:
