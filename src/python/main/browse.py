@@ -231,7 +231,7 @@ headers = {
     'anthropic-version': '2023-06-01'  # Replace with the correct version
 }
 
-def generate_replies(prompt):
+def generate_claude_replies(prompt):
     """Calls Claude API to generate replies based on the prompt."""
     payload = {
         'model': 'claude-3-5-sonnet-20240620',
@@ -364,7 +364,7 @@ def main():
                 print(f"Reply: {reply}")
 
                 prompt = f"Original Tweet: {original_post}\nDraft a polite and engaging unique and clever response."
-                suggestions = generate_replies(prompt)
+                suggestions = generate_claude_replies(prompt)
 
                 app = QApplication(sys.argv)
                 window = TweetResponder(original_post, suggestions)
