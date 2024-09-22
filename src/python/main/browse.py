@@ -5,50 +5,32 @@ import sys, multiprocessing
 import os
 import json
 import requests
-from PyQt5.QtWidgets import (QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QFrame, QMessageBox, QTextEdit, QSizePolicy)
+from PyQt5.QtWidgets import (QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QFrame, QMessageBox, QTextEdit, QSizePolicy, QPushButton)
 from PyQt5.QtGui import QFont, QIcon, QCursor, QPixmap, QColor
 from PyQt5.QtCore import Qt
 
 class TweetFrame(QFrame):
-    def __init__(self, text, parent=None):
+    def __init__(self, text, is_original=False, parent=None):
         super().__init__(parent)
         self.setObjectName("tweetFrame")
         layout = QVBoxLayout()
 
-        # Profile picture
-        profile_pic = QLabel()
-        pixmap = QPixmap("default_profile.png")
-        if pixmap.isNull():
-            pixmap = QPixmap(48, 48)
-            pixmap.fill(QColor("#1DA1F2"))
-        profile_pic.setPixmap(pixmap.scaled(48, 48, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        profile_pic.setFixedSize(48, 48)
-        profile_pic.setStyleSheet("border-radius: 24px; background-color: #2F3336;")
-
-        # Username and handle
-        user_info = QLabel("Username @handle")
-        user_info.setStyleSheet("color: #8899A6; font-size: 14px;")
-
         # Tweet text
         self.tweet_text = QLabel(text)
         self.tweet_text.setWordWrap(True)
-        self.tweet_text.setStyleSheet("color: #FFFFFF; font-size: 16px;")
+        self.tweet_text.setStyleSheet(f"color: #000000; font-size: 16px;")
 
-        header_layout = QHBoxLayout()
-        header_layout.addWidget(profile_pic)
-        header_layout.addWidget(user_info, 1)
-
-        layout.addLayout(header_layout)
         layout.addWidget(self.tweet_text)
 
         self.setLayout(layout)
-        self.setStyleSheet("""
-            QFrame#tweetFrame {
-                background-color: #15202B;
-                border: 1px solid #38444D;
+        self.setStyleSheet(f"""
+            QFrame#tweetFrame {{
+                background-color: #FFFFFF;
+                border: 1px solid #E1E8ED;
                 border-radius: 12px;
-                padding: 5px;
-            }
+                padding: 10px;
+                margin-bottom: 10px;
+            }}
         """)
 
 class TweetResponder(QWidget):
@@ -56,35 +38,28 @@ class TweetResponder(QWidget):
         super().__init__()
         self.original_post = original_post
         self.reply = reply
-        self.setWindowTitle("Tweet Responder")
-        self.resize(600, 700)
+        self.setWindowTitle("Tweet and Reply")
+        self.resize(500, 400)
         self.setWindowIcon(QIcon('icon.png'))
         self.setStyleSheet("""
             QWidget {
-                background-color: #15202B;
-                color: #FFFFFF;
+                background-color: #F5F8FA;
+                color: #14171A;
                 font-family: "Helvetica Neue", Arial, sans-serif;
             }
             QLabel {
-                color: #FFFFFF;
+                color: #14171A;
             }
-            QFrame {
+            QPushButton {
                 background-color: #1DA1F2;
                 color: #FFFFFF;
                 border: none;
                 border-radius: 20px;
                 padding: 10px;
+                font-size: 14px;
             }
-            QFrame:hover {
+            QPushButton:hover {
                 background-color: #1A91DA;
-            }
-            QTextEdit {
-                background-color: #253341;
-                color: #FFFFFF;
-                border: none;
-                border-radius: 10px;
-                padding: 10px;
-                font-size: 16px;
             }
         """)
         self.init_ui()
@@ -94,7 +69,7 @@ class TweetResponder(QWidget):
         main_layout.setSpacing(20)
 
         # Original Tweet Display
-        self.tweet_frame = TweetFrame(self.original_post)
+        self.tweet_frame = TweetFrame(self.original_post, is_original=True)
         main_layout.addWidget(self.tweet_frame)
 
         # Reply Display
@@ -102,9 +77,9 @@ class TweetResponder(QWidget):
             self.reply_frame = TweetFrame(self.reply)
             main_layout.addWidget(self.reply_frame)
         else:
-            reply_label = QLabel("No replies yet")
-            reply_label.setStyleSheet("color: #8899A6; font-size: 14px;")
-            main_layout.addWidget(reply_label)
+            no_reply_label = QLabel("No replies yet")
+            no_reply_label.setStyleSheet("color: #657786; font-style: italic;")
+            main_layout.addWidget(no_reply_label)
 
         # Replies Buttons Layout
         self.buttons_layout = QVBoxLayout()
@@ -138,31 +113,16 @@ class TweetResponder(QWidget):
                 if widget is not None:
                     widget.setParent(None)
 
-            # Create buttons for each suggestion using QFrame and QLabel
-            for idx, suggestion in enumerate(suggestions):
-                reply_frame = QFrame()
-                reply_layout = QHBoxLayout()
-                reply_label = QLabel(suggestion)
-                reply_label.setFont(QFont('Helvetica Neue', 14))
-                reply_label.setWordWrap(True)
-                reply_frame.setCursor(QCursor(Qt.PointingHandCursor))
-                reply_frame.mousePressEvent = lambda event, s=suggestion: self.save_reply(s)
-
-                reply_layout.addWidget(reply_label)
-                reply_frame.setLayout(reply_layout)
-                self.buttons_layout.addWidget(reply_frame)
+            # Create buttons for each suggestion
+            for suggestion in suggestions:
+                reply_button = QPushButton(suggestion)
+                reply_button.clicked.connect(lambda _, s=suggestion: self.save_reply(s))
+                self.buttons_layout.addWidget(reply_button)
 
             # Add the "No Response" button
-            no_response_frame = QFrame()
-            no_response_layout = QHBoxLayout()
-            no_response_label = QLabel("No Response")
-            no_response_label.setFont(QFont('Helvetica Neue', 14))
-            no_response_frame.setCursor(QCursor(Qt.PointingHandCursor))
-            no_response_frame.mousePressEvent = self.no_response
-
-            no_response_layout.addWidget(no_response_label)
-            no_response_frame.setLayout(no_response_layout)
-            self.buttons_layout.addWidget(no_response_frame)
+            no_response_button = QPushButton("No Response")
+            no_response_button.clicked.connect(self.no_response)
+            self.buttons_layout.addWidget(no_response_button)
         else:
             QMessageBox.information(self, "No Suggestions", "No suggestions generated.")
 
@@ -219,7 +179,7 @@ class TweetResponder(QWidget):
             QMessageBox.critical(self, "Error", f"Failed to save file: {e}")
         self.close()
 
-    def no_response(self, event):
+    def no_response(self):
         QMessageBox.information(self, "No Response", "You have chosen not to respond.")
         self.close()
 
