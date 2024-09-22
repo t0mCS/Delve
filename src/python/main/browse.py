@@ -121,39 +121,38 @@ class TweetResponder(QWidget):
         main_layout.addWidget(scroll_area)
         self.setLayout(main_layout)
 
-    def use_reply(self, suggestion):
-        try:
-            # Find all reply buttons
-            reply_buttons = self.page.query_selector_all('button[data-testid="reply"]')
 
-            if len(reply_buttons) < 2:
-                raise Exception("Couldn't find the reply button for the comment")
+def use_reply(self, suggestion):
+    try:
+        # Find all reply buttons
+        reply_buttons = self.page.query_selector_all('button[data-testid="reply"]')
 
-            # Click the second reply button (first one is for the original tweet, second is for the comment)
-            reply_buttons[1].click()
+        if len(reply_buttons) < 2:
+            raise Exception("Couldn't find the reply button for the comment")
 
-            # Wait for the reply text box to appear and type the suggestion
-            self.page.wait_for_selector('div[data-testid="tweetTextarea_0"]')
-            # Use the correct selector to fill in the suggestion
-            self.page.evaluate(f"""
-                (suggestion) => {{
-                    const editor = document.querySelector('div[data-testid="tweetTextarea_0"] .public-DraftEditor-content');
-                    if (editor) {{
-                        const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
-                        nativeTextAreaValueSetter.call(editor, suggestion);
-                        const event = new Event('input', {{ bubbles: true }});
-                        editor.dispatchEvent(event);
-                    }}
-                }}
-            """, suggestion)
+        # Click the second reply button (first one is for the original tweet, second is for the comment)
+        reply_buttons[1].click()
 
-            # Click the Reply button
-            self.page.click('div[data-testid="tweetButtonInline"]')
+        # Wait for the reply text box to appear
+        self.page.wait_for_selector('div[data-testid="tweetTextarea_0"]')
 
-            QMessageBox.information(self, "Reply Sent", "Your reply has been posted successfully!")
-            self.close()
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to post reply: {str(e)}")
+        # Use a more specific selector to fill in the suggestion
+        textarea_selector = 'div[data-testid="tweetTextarea_0"] div[contenteditable="true"]'
+        self.page.wait_for_selector(textarea_selector)
+        self.page.fill(textarea_selector, suggestion)
+
+        # Ensure the text is entered by checking its value
+        entered_text = self.page.evaluate(f'document.querySelector("{textarea_selector}").textContent')
+        if entered_text.strip() != suggestion.strip():
+            raise Exception("Failed to enter the suggestion text correctly")
+
+        # Click the Reply button
+        self.page.click('div[data-testid="tweetButtonInline"]')
+
+        QMessageBox.information(self, "Reply Sent", "Your reply has been posted successfully!")
+        self.close()
+    except Exception as e:
+        QMessageBox.critical(self, "Error", f"Failed to post reply: {str(e)}")
 
     def no_response(self):
         QMessageBox.information(self, "No Response", "You have chosen not to respond.")
